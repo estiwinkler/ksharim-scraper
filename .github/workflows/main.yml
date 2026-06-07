@@ -31,8 +31,7 @@ jobs:
       - name: Debug API key
         run: |
            echo "Key length: ${#GROQ_API_KEY}"
-           echo "Key prefix: ${GROQ_API_KEY:0:4}"
-           curl -s -o /dev/null -w "%{http_code}" https://api.groq.com/openai/v1/models \  -H "Authorization: Bearer $GROQ_API_KEY"
+           echo "Key prefix: ${GROQ_API_KEY:0:4}" 
         env:
            GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           
