@@ -55,9 +55,9 @@ def ask_gemini(words: list[str]) -> list[dict]:
 
     # נסה מספר מודלים בסדר עדיפות
     models = [
-        "gemini-1.5-flash",
-        "gemini-1.5-flash-8b",
-        "gemini-1.0-pro",
+       "gemini-2.0-flash-lite",
+       "gemini-2.0-flash",
+       "gemini-2.5-flash",
     ]
 
     last_error = None
