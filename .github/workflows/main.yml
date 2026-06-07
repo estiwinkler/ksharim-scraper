@@ -1,0 +1,40 @@
+name: קשרים בריבוע - סריקה יומית
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install playwright openpyxl
+          playwright install chromium
+          playwright install-deps chromium
+
+      - name: Run scraper
+        run: python ksharim_scraper.py
+
+      - name: Commit and push results
+        run: |
+          git config --local user.email "scraper@github-actions"
+          git config --local user.name "Ksharim Scraper Bot"
+          git add data/
+          git diff --staged --quiet || git commit -m "פאזל יומי $(date +'%Y-%m-%d')"
+          git push
