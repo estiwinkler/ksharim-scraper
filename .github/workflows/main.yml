@@ -1,8 +1,8 @@
-name: קשרים בריבוע - סריקה יומית
+name: קשרים בריבוע - סריקה יומית חכמה
 
 on:
   schedule:
-    - cron: '0 6 * * *'
+    - cron: '0 6 * * *'  # כל יום 08:00 שעון ישראל
   workflow_dispatch:
 
 jobs:
@@ -29,6 +29,8 @@ jobs:
           playwright install-deps chromium
 
       - name: Run scraper
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python ksharim_scraper.py
 
       - name: Commit and push results
