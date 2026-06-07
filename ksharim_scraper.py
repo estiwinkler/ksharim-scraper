@@ -53,20 +53,37 @@ def ask_gemini(words: list[str]) -> list[dict]:
         "generationConfig": {"temperature": 0.1}
     }).encode("utf-8")
 
-    req = urllib.request.Request(
-        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}",
-        data=body,
-        headers={"Content-Type": "application/json"},
-        method="POST"
-    )
+    # נסה מספר מודלים בסדר עדיפות
+    models = [
+        "gemini-1.5-flash",
+        "gemini-1.5-flash-8b",
+        "gemini-1.0-pro",
+    ]
 
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        result = json.loads(resp.read().decode("utf-8"))
+    last_error = None
+    for model in models:
+        try:
+            log(f"מנסה מודל: {model}")
+            req = urllib.request.Request(
+                f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}",
+                data=body,
+                headers={"Content-Type": "application/json"},
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                result = json.loads(resp.read().decode("utf-8"))
+            text = result["candidates"][0]["content"]["parts"][0]["text"]
+            text = re.sub(r"```json|```", "", text).strip()
+            parsed = json.loads(text)
+            log(f"✅ הצליח עם מודל: {model}")
+            return parsed
+        except Exception as e:
+            log(f"מודל {model} נכשל: {e}")
+            last_error = e
+            import time
+            time.sleep(2)  # המתן 2 שניות לפני הניסיון הבא
 
-    text = result["candidates"][0]["content"]["parts"][0]["text"]
-    # נקה backticks אם יש
-    text = re.sub(r"```json|```", "", text).strip()
-    return json.loads(text)
+    raise Exception(f"כל המודלים נכשלו. שגיאה אחרונה: {last_error}")
 
 
 # ============================================================
