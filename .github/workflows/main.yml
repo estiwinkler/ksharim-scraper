@@ -27,7 +27,14 @@ jobs:
           pip install playwright openpyxl
           playwright install chromium
           playwright install-deps chromium
-
+          
+      - name: Debug API key
+        run: |
+          echo "Key length: ${#GROQ_API_KEY}"
+          echo "Key prefix: ${GROQ_API_KEY:0:4}"
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          
       - name: Run scraper
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
