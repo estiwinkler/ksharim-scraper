@@ -19,7 +19,7 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 # ============================================================
 # הגדרות
 # ============================================================
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "הכנסי את ה-KEY שלך כאן")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "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")
 GROQ_MODEL   = "llama-3.3-70b-versatile"
 URL          = "https://ksharim-baribua.com/"
 
