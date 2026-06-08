@@ -1,13 +1,14 @@
 """
 קשרים בריבוע - Scraper חכם עם Groq AI
-לולאת ניחוש אמיתית: הבוט לוחץ, בודק אם נכון, ומתקן אם טעה
+- מנסה לפתור עם AI (עד 4 טעויות)
+- אחרי 4 טעויות: טועה בכוונה פעם 5 → האתר מציג פתרון → אוסף נתונים
+- שומר JSON ו-Excel מצטברים (לא מוחק ימים קודמים)
 """
 
 import asyncio
 import json
 import re
 import os
-import time
 import urllib.request
 from datetime import date, datetime
 from pathlib import Path
@@ -19,9 +20,10 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 # ============================================================
 # הגדרות
 # ============================================================
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "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")
-GROQ_MODEL   = "llama-3.3-70b-versatile"
-URL          = "https://ksharim-baribua.com/"
+GROQ_API_KEY   = os.environ.get("GROQ_API_KEY", "הכנסי את ה-KEY שלך כאן")
+GROQ_MODEL     = "llama-3.3-70b-versatile"
+URL            = "https://ksharim-baribua.com/"
+MAX_WRONG_GUESSES = 4   # אחרי 4 טעויות → בזבז את הניחוש ה-5 כדי לחשוף פתרון
 
 DATA_DIR   = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
@@ -31,15 +33,25 @@ LOG_FILE   = DATA_DIR / "scrape_log.txt"
 
 
 # ============================================================
+# לוג
+# ============================================================
+def log(message: str):
+    ts   = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    line = f"[{ts}] {message}"
+    print(line)
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(line + "\n")
+
+
+# ============================================================
 # Groq AI
 # ============================================================
 def ask_groq(prompt: str) -> str:
-    """שולח prompt ל-Groq ומחזיר את התשובה כטקסט."""
     body = json.dumps({
         "model": GROQ_MODEL,
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.1,
-        "max_tokens": 1000,
+        "max_tokens": 500,
     }).encode("utf-8")
 
     req = urllib.request.Request(
@@ -51,31 +63,49 @@ def ask_groq(prompt: str) -> str:
         },
         method="POST"
     )
-
     with urllib.request.urlopen(req, timeout=30) as resp:
         result = json.loads(resp.read().decode("utf-8"))
-
     return result["choices"][0]["message"]["content"].strip()
 
 
-def guess_first_group(remaining_words: list[str], failed_groups: list[list[str]]) -> dict:
-    """
-    מבקש מ-Groq לנחש את הקבוצה הבטוחה ביותר מתוך המילים שנשארו.
-    אם היו קבוצות כושלות - מעביר אותן כדי שלא ינחש שוב.
-    """
+def guess_group(remaining: list[str], failed: list[list[str]]) -> dict:
     failed_str = ""
-    if failed_groups:
-        failed_str = "\n\nקבוצות שכבר ניסיתי ונכשלו (אל תנחש אותן שוב):\n"
-        for f in failed_groups:
+    if failed:
+        failed_str = "\n\nקבוצות שנכשלו - אל תנחש שוב:\n"
+        for f in failed:
             failed_str += f"- {', '.join(f)}\n"
 
-    prompt = f"""אתה משחק "קשרים בריבוע" - משחק עברי שבו צריך למצוא קבוצות של 4 מילים שיש ביניהן קשר.
+    prompt = f"""אתה משחק "קשרים בריבוע" - משחק עברי שבו צריך למצוא קבוצות של 4 מילים עם קשר משותף.
 
-המילים שנשארו: {', '.join(remaining_words)}
+המילים שנשארו: {', '.join(remaining)}
 {failed_str}
-בחר את הקבוצה שאתה הכי בטוח בה - 4 מילים עם קטגוריה ברורה.
+בחר את הקבוצה שאתה הכי בטוח בה.
 
-ענה אך ורק ב-JSON תקין, ללא שום טקסט נוסף:
+ענה ב-JSON בלבד, ללא טקסט נוסף:
+{{"category": "שם הקטגוריה", "words": ["מילה1", "מילה2", "מילה3", "מילה4"]}}"""
+
+    text = ask_groq(prompt)
+    text = re.sub(r"```json|```", "", text).strip()
+    return json.loads(text)
+
+
+def guess_almost_fix(remaining: list[str], almost_words: list[str], failed: list[list[str]]) -> dict:
+    failed_str = ""
+    if failed:
+        failed_str = "\n\nשילובים שנכשלו לגמרי:\n"
+        for f in failed:
+            failed_str += f"- {', '.join(f)}\n"
+
+    prompt = f"""אתה משחק "קשרים בריבוע" - משחק עברי.
+
+ניסיתי: {', '.join(almost_words)}
+האתר אמר "כמעט..." - 3 מתוך 4 נכונות, אחת שגויה.
+
+כל המילים שנשארו: {', '.join(remaining)}
+{failed_str}
+החלף מילה אחת שגויה במילה אחרת מהרשימה.
+
+ענה ב-JSON בלבד:
 {{"category": "שם הקטגוריה", "words": ["מילה1", "מילה2", "מילה3", "מילה4"]}}"""
 
     text = ask_groq(prompt)
@@ -84,10 +114,9 @@ def guess_first_group(remaining_words: list[str], failed_groups: list[list[str]]
 
 
 # ============================================================
-# שליפת מילים מהאתר
+# פעולות Playwright
 # ============================================================
 async def get_words(page) -> list[str]:
-    """שולף את 16 המילים מהדף."""
     await page.wait_for_timeout(3000)
 
     buttons = await page.evaluate("""
@@ -95,9 +124,8 @@ async def get_words(page) -> list[str]:
             const btns = [];
             document.querySelectorAll('button, [role="button"], [class*="word"], [class*="Word"], [class*="tile"], [class*="card"]').forEach(el => {
                 const txt = el.innerText?.trim();
-                if (txt && /[\u05d0-\u05ea]{2,}/.test(txt) && txt.length < 20) {
+                if (txt && /[\u05d0-\u05ea]{2,}/.test(txt) && txt.length < 20)
                     btns.push(txt);
-                }
             });
             return [...new Set(btns)];
         }
@@ -113,11 +141,7 @@ async def get_words(page) -> list[str]:
     return words
 
 
-# ============================================================
-# לחיצה על מילים באתר
-# ============================================================
 async def click_words(page, words: list[str]) -> int:
-    """לוחץ על 4 מילים. מחזיר כמה הצליח ללחוץ."""
     clicked = 0
     for word in words:
         try:
@@ -138,9 +162,7 @@ async def click_words(page, words: list[str]) -> int:
 
 
 async def deselect_all(page):
-    """מבטל את כל הבחירות (לחיצה שנייה על כל מילה נבחרת)."""
     try:
-        # נסה כפתור "נקה" אם קיים
         clear = page.get_by_role("button", name=re.compile("נקה|ביטול|clear|deselect", re.IGNORECASE))
         if await clear.count() > 0:
             await clear.first.click()
@@ -148,8 +170,6 @@ async def deselect_all(page):
             return
     except Exception:
         pass
-
-    # אחרת לחץ שוב על כל מילה נבחרת כדי לבטל
     try:
         selected = await page.evaluate("""
             () => {
@@ -173,12 +193,8 @@ async def deselect_all(page):
         pass
 
 
-async def check_and_detect_result(page) -> str:
-    """
-    לוחץ על כפתור 'בדוק' ומזהה אם הניחוש נכון או לא.
-    מחזיר: 'correct' / 'wrong' / 'unknown'
-    """
-    # לחץ בדוק
+async def submit_guess(page):
+    """לוחץ על כפתור בדוק."""
     try:
         check = page.get_by_role("button", name=re.compile("בדוק|אשר|שלח|submit|confirm", re.IGNORECASE))
         if await check.count() > 0:
@@ -187,102 +203,249 @@ async def check_and_detect_result(page) -> str:
     except Exception:
         pass
 
-    # בדוק אם יש הודעת הצלחה/כישלון
-    result_text = await page.evaluate("""
+
+async def close_alert(page):
+    """סוגר alert/popup אם קיים."""
+    try:
+        close = page.get_by_role("button", name=re.compile("סגור|אישור|המשך|ok|close|×|✕", re.IGNORECASE))
+        if await close.count() > 0:
+            await close.first.click()
+            await page.wait_for_timeout(800)
+            return
+        # נסה ESC
+        await page.keyboard.press("Escape")
+        await page.wait_for_timeout(500)
+    except Exception:
+        pass
+
+
+async def check_result(page) -> str:
+    """
+    מזהה תוצאה אחרי לחיצת בדוק.
+    מחזיר: 'correct' / 'almost' / 'wrong' / 'unknown'
+    """
+    alert_text = await page.evaluate("""
         () => {
-            const body = document.body.innerText.toLowerCase();
-            // חפש סימנים להצלחה
-            if (body.includes('כל הכבוד') || body.includes('נכון') ||
-                body.includes('correct') || body.includes('success') ||
-                body.includes('ניצחת') || body.includes('מעולה')) {
-                return 'correct';
+            const els = document.querySelectorAll('[role="alert"], [class*="alert"], [class*="modal"], [class*="popup"], [class*="toast"], [class*="message"]');
+            for (const el of els) {
+                const txt = el.innerText?.trim();
+                if (txt && txt.length > 0) return txt;
             }
-            // חפש סימנים לכישלון
-            if (body.includes('טעות') || body.includes('נסה שוב') ||
-                body.includes('wrong') || body.includes('incorrect') ||
-                body.includes('לא נכון') || body.includes('חבל')) {
-                return 'wrong';
-            }
+            return "";
+        }
+    """)
+
+    body_result = await page.evaluate("""
+        () => {
+            const body = document.body.innerText;
+            if (body.includes('כמעט'))                                 return 'almost';
+            if (body.includes('כל הכבוד') || body.includes('ניצחת') ||
+                body.includes('מעולה')    || body.includes('correct')) return 'correct';
+            if (body.includes('טעות')    || body.includes('נסה שוב') ||
+                body.includes('לא נכון') || body.includes('חבל')     ||
+                body.includes('wrong'))                                return 'wrong';
             return 'unknown';
         }
     """)
 
-    # בדוק גם לפי כמה קבוצות נפתרו (אם נפתרה אחת נוספת = נכון)
-    solved_count = await page.evaluate("""
+    if alert_text:
+        log(f"  אלרט: '{alert_text}'")
+        if "כמעט"    in alert_text: result = "almost"
+        elif any(w in alert_text for w in ["כל הכבוד","ניצחת","מעולה","correct"]): result = "correct"
+        elif any(w in alert_text for w in ["טעות","נסה שוב","לא נכון","חבל","wrong"]): result = "wrong"
+        else: result = body_result
+    else:
+        result = body_result
+
+    log(f"  תוצאה: {result}")
+    return result
+
+
+# ============================================================
+# איסוף פתרון מהמסך הסופי
+# ============================================================
+async def collect_solution_from_screen(page) -> list[dict]:
+    """
+    אוסף את הפתרון המוצג על המסך.
+    המבנה: כותרת קטגוריה + מילים מופרדות ב-•
+    לדוגמה:
+      נשיאי ארצות הברית
+      בוש • לינקולן • פורד • קרטר
+    """
+    await page.wait_for_timeout(2000)
+
+    groups = await page.evaluate("""
         () => {
-            let count = 0;
-            const selectors = ['[class*="solved"]','[class*="complete"]','[class*="revealed"]','[class*="done"]'];
+            const results = [];
+            // חפש בלוקים של קטגוריות - לפי הצבעים/קלאסים
+            const selectors = [
+                '[class*="group"]', '[class*="Group"]',
+                '[class*="category"]', '[class*="Category"]',
+                '[class*="solved"]', '[class*="result"]',
+                '[class*="card"]'
+            ];
+
             for (const sel of selectors) {
-                count += document.querySelectorAll(sel).length;
+                document.querySelectorAll(sel).forEach(el => {
+                    const txt = el.innerText?.trim();
+                    if (!txt || txt.length < 5) return;
+
+                    // בדוק אם יש • (מפריד בין מילים)
+                    if (txt.includes('•')) {
+                        const lines = txt.split('\\n').map(l => l.trim()).filter(Boolean);
+                        if (lines.length >= 2) {
+                            const category = lines[0];
+                            const wordsLine = lines.find(l => l.includes('•'));
+                            if (wordsLine) {
+                                const words = wordsLine.split('•').map(w => w.trim()).filter(Boolean);
+                                if (words.length >= 3) {
+                                    results.push({ category, words });
+                                }
+                            }
+                        }
+                    }
+                });
+                if (results.length >= 4) break;
             }
-            return count;
+            return results;
         }
     """)
 
-    log(f"  תוצאה: {result_text}, קבוצות שנפתרו: {solved_count}")
-    return result_text
+    # אם לא מצא, נסה גישה גנרית לפי טקסט הגוף
+    if len(groups) < 2:
+        log("  מנסה גישה חלופית לאיסוף פתרון...")
+        raw_text = await page.inner_text("body")
+        groups = parse_solution_from_text(raw_text)
+
+    log(f"  נאספו {len(groups)} קבוצות מהמסך")
+    for g in groups:
+        log(f"    📌 {g.get('category')}: {', '.join(g.get('words', []))}")
+
+    return groups
+
+
+def parse_solution_from_text(text: str) -> list[dict]:
+    """מנתח טקסט גולמי ומחפש קטגוריות ומילים."""
+    groups = []
+    lines  = [l.strip() for l in text.split('\n') if l.strip()]
+
+    for i, line in enumerate(lines):
+        if '•' in line:
+            # השורה הזו היא מילים - הקטגוריה בשורה לפניה
+            words = [w.strip() for w in line.split('•') if w.strip()]
+            if len(words) >= 3:
+                category = lines[i-1] if i > 0 else "קטגוריה לא ידועה"
+                # וודא שהקטגוריה לא מכילה • (שלא תהיה שורת מילים נוספת)
+                if '•' not in category and len(category) < 50:
+                    groups.append({"category": category, "words": words, "source": "screen"})
+
+    return groups[:4]
 
 
 # ============================================================
 # לולאת הפתרון הראשית
 # ============================================================
-async def solve_puzzle(page, words_16: list[str]) -> list[dict]:
+async def solve_puzzle(page, words_16: list[str]) -> dict:
     """
-    לולאה שמנחשת קבוצה אחת בכל פעם:
-    - אם נכון: שומרת ועוברת לקבוצה הבאה
-    - אם טועה: שולחת ל-Groq שוב עם המידע על הכישלון
-    מקסימום 12 ניסיונות סה"כ (3 ניסיונות לכל קבוצה * 4 קבוצות)
+    1. מנסה לפתור עם Groq (עד MAX_WRONG_GUESSES טעויות)
+    2. אם הגיע למגבלה → מבזבז את הניחוש האחרון → אוסף פתרון מהמסך
+    3. אם פתר הכל נכון → שומר את הפתרון
     """
-    solved_groups  = []   # קבוצות שאושרו
-    remaining      = list(words_16)  # מילים שעוד לא נפתרו
-    failed_groups  = []   # קבוצות שניסינו ונכשלו
-    max_attempts   = 12
-    attempt        = 0
+    solved_groups = []    # קבוצות שנפתרו נכון
+    remaining     = list(words_16)
+    failed        = []
+    almost_words  = None
+    wrong_count   = 0     # סופר טעויות
+    attempt       = 0
+    max_attempts  = 15
 
     while len(solved_groups) < 4 and attempt < max_attempts and len(remaining) >= 4:
         attempt += 1
-        log(f"\n--- ניסיון {attempt} | נפתרו: {len(solved_groups)}/4 | נשארו: {len(remaining)} מילים ---")
+        log(f"\n--- ניסיון {attempt} | נפתרו: {len(solved_groups)}/4 | טעויות: {wrong_count}/{MAX_WRONG_GUESSES} ---")
 
-        # נחש קבוצה
+        # הגענו למגבלת הטעויות → בזבז ניחוש אחרון → חכה לפתרון
+        if wrong_count >= MAX_WRONG_GUESSES:
+            log("⚠️ הגענו ל-4 טעויות → מבזבז ניחוש אחד נוסף כדי לחשוף פתרון...")
+            await click_words(page, remaining[:4])
+            await submit_guess(page)
+            await page.wait_for_timeout(3000)
+            await close_alert(page)
+            await page.wait_for_timeout(2000)
+
+            # אסוף פתרון מהמסך
+            screen_solution = await collect_solution_from_screen(page)
+
+            # שלב: קבוצות שכבר פתרנו + קבוצות שנאספו מהמסך
+            all_groups = solved_groups[:]
+            solved_cats = {g["category"] for g in solved_groups}
+            for g in screen_solution:
+                if g.get("category") not in solved_cats:
+                    all_groups.append({**g, "correct": True, "source": "screen"})
+
+            return {
+                "solved_groups":  all_groups,
+                "total_solved":   len(all_groups),
+                "source":         "screen_after_fail",
+                "wrong_guesses":  wrong_count + 1,
+            }
+
+        # נחש עם Groq
         try:
-            group = guess_first_group(remaining, failed_groups)
-            cat   = group.get("category", "")
-            words = group.get("words", [])
-            log(f"Groq מנחש: {cat} → {words}")
+            if almost_words:
+                group = guess_almost_fix(remaining, almost_words, failed)
+                log(f"Groq מתקן כמעט: {group.get('category')} → {group.get('words')}")
+            else:
+                group = guess_group(remaining, failed)
+                log(f"Groq מנחש: {group.get('category')} → {group.get('words')}")
         except Exception as e:
             log(f"שגיאת Groq: {e}")
-            break
-
-        # וודא שכל המילים קיימות ברשימה
-        words = [w for w in words if w in remaining]
-        if len(words) != 4:
-            log(f"  ⚠️ לא כל המילים קיימות, מדלג")
-            failed_groups.append(group.get("words", []))
+            wrong_count += 1
             continue
 
-        # לחץ על המילים
+        cat   = group.get("category", "")
+        words = [w for w in group.get("words", []) if w in remaining]
+
+        if len(words) != 4:
+            log(f"  ⚠️ מילים לא תקינות")
+            failed.append(group.get("words", []))
+            almost_words = None
+            continue
+
         clicked = await click_words(page, words)
         log(f"  לחצתי על {clicked}/4 מילים")
-
-        # בדוק תוצאה
-        result = await check_and_detect_result(page)
+        await submit_guess(page)
+        result = await check_result(page)
+        await close_alert(page)
 
         if result == "correct":
-            log(f"  ✅ נכון! קבוצה: {cat}")
-            solved_groups.append({"category": cat, "words": words, "correct": True})
-            remaining = [w for w in remaining if w not in words]
-            failed_groups = []  # אפס כישלונות לקבוצה הבאה
-        else:
-            log(f"  ❌ טעות, מנסה שוב עם מידע מעודכן")
-            failed_groups.append(words)
+            log(f"  ✅ נכון! {cat}")
+            solved_groups.append({"category": cat, "words": words, "correct": True, "source": "ai"})
+            remaining    = [w for w in remaining if w not in words]
+            failed       = []
+            almost_words = None
+
+        elif result == "almost":
+            log(f"  🟡 כמעט! מחליף מילה אחת")
+            almost_words = words
             await deselect_all(page)
 
-    # אם נשארו מילים ויש 3 קבוצות - הקבוצה האחרונה ברורה
-    if len(solved_groups) == 3 and len(remaining) == 4:
-        log("קבוצה אחרונה - מה שנשאר!")
-        solved_groups.append({"category": "קבוצה אחרונה", "words": remaining, "correct": True})
+        else:
+            log(f"  ❌ טעות ({wrong_count + 1}/{MAX_WRONG_GUESSES})")
+            failed.append(words)
+            almost_words = None
+            wrong_count += 1
+            await deselect_all(page)
 
-    return solved_groups
+    # פתר הכל נכון!
+    if len(solved_groups) == 3 and len(remaining) == 4:
+        solved_groups.append({"category": "קבוצה אחרונה", "words": remaining, "correct": True, "source": "ai"})
+
+    return {
+        "solved_groups": solved_groups,
+        "total_solved":  len(solved_groups),
+        "source":        "ai",
+        "wrong_guesses": wrong_count,
+    }
 
 
 # ============================================================
@@ -295,55 +458,58 @@ async def fetch_and_solve() -> dict:
         page    = await context.new_page()
 
         await page.goto(URL, wait_until="networkidle", timeout=30000)
-
         words = await get_words(page)
+
         if len(words) < 8:
+            await browser.close()
             return {"error": "לא נמצאו מספיק מילים", "words": words, "solved_groups": []}
 
-        log("מתחיל לפתור עם Groq AI...")
-        solved = await solve_puzzle(page, words)
-
+        log("מתחיל לפתור...")
+        result = await solve_puzzle(page, words)
         await browser.close()
 
-        return {
-            "words_found":   words,
-            "solved_groups": solved,
-            "total_solved":  len(solved),
-        }
+        result["words_found"] = words
+        return result
 
 
 # ============================================================
-# שמירה ל-JSON
+# שמירה ל-JSON (מצטבר - לא מוחק ימים קודמים)
 # ============================================================
 def save_to_json(puzzle: dict):
+    # טען מאגר קיים או צור חדש
     if JSON_FILE.exists():
         with open(JSON_FILE, "r", encoding="utf-8") as f:
             db = json.load(f)
     else:
-        db = {"puzzles": [], "total": 0}
+        db = {"puzzles": [], "total": 0, "created": date.today().isoformat()}
 
-    today    = date.today().isoformat()
+    today = date.today().isoformat()
+
+    # עדכן אם היום כבר קיים, אחרת הוסף
     existing = [i for i, p in enumerate(db["puzzles"]) if p.get("date") == today]
     if existing:
         db["puzzles"][existing[0]] = puzzle
+        log(f"  עודכן רשומה קיימת ליום {today}")
     else:
         db["puzzles"].append(puzzle)
+        log(f"  נוספה רשומה חדשה ליום {today}")
 
     db["total"]        = len(db["puzzles"])
     db["last_updated"] = datetime.now().isoformat()
 
     with open(JSON_FILE, "w", encoding="utf-8") as f:
         json.dump(db, f, ensure_ascii=False, indent=2)
-    log("✅ JSON נשמר")
+    log(f"✅ JSON נשמר - סה\"כ {db['total']} ימים במאגר")
 
 
 # ============================================================
-# שמירה ל-Excel
+# שמירה ל-Excel (מצטבר - לא מוחק ימים קודמים)
 # ============================================================
 def save_to_excel(puzzle: dict):
     HEADER_BG = "2E4057"
-    COLORS    = {0: "AED6F1", 1: "ABEBC6", 2: "FAD7A0", 3: "F1948A"}
+    COLORS    = {0: "ABEBC6", 1: "FAD7A0", 2: "F1948A", 3: "AED6F1"}
 
+    # טען קובץ קיים או צור חדש עם כותרות
     if EXCEL_FILE.exists():
         wb = openpyxl.load_workbook(EXCEL_FILE)
         ws = wb.active
@@ -351,35 +517,45 @@ def save_to_excel(puzzle: dict):
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "קשרים בריבוע"
-        headers  = ["תאריך", "קטגוריה", "מילה 1", "מילה 2", "מילה 3", "מילה 4", "נכון?"]
+        headers  = ["תאריך", "קטגוריה", "מילה 1", "מילה 2", "מילה 3", "מילה 4", "נכון?", "מקור"]
         for col, h in enumerate(headers, 1):
             cell           = ws.cell(row=1, column=col, value=h)
             cell.font      = Font(bold=True, color="FFFFFF", size=12, name="Arial")
             cell.fill      = PatternFill("solid", fgColor=HEADER_BG)
             cell.alignment = Alignment(horizontal="center", vertical="center")
         ws.column_dimensions["A"].width = 14
-        ws.column_dimensions["B"].width = 30
-        for c in ["C","D","E","F"]:
-            ws.column_dimensions[c].width = 14
-        ws.column_dimensions["G"].width = 10
+        ws.column_dimensions["B"].width = 32
+        for c in ["C","D","E","F"]: ws.column_dimensions[c].width = 14
+        ws.column_dimensions["G"].width = 8
+        ws.column_dimensions["H"].width = 10
         ws.row_dimensions[1].height = 28
 
     today  = puzzle.get("date", date.today().isoformat())
     groups = puzzle.get("solved_groups", [])
 
+    # מחק שורות של היום אם קיימות (עדכון)
+    rows_to_delete = []
+    for row in ws.iter_rows(min_row=2):
+        if row[0].value == today:
+            rows_to_delete.append(row[0].row)
+    for r in reversed(rows_to_delete):
+        ws.delete_rows(r)
+
+    # הוסף שורות חדשות
     for i, group in enumerate(groups):
         row   = ws.max_row + 1
-        color = COLORS.get(i, "FFFFFF")
         words = group.get("words", [])
+        src   = "🤖 AI" if group.get("source") == "ai" else "📺 מסך"
         vals  = [
             today,
             group.get("category", ""),
             *words[:4],
-            "✅" if group.get("correct") else "❓"
+            "✅" if group.get("correct") else "❓",
+            src,
         ]
         for col, val in enumerate(vals, 1):
             cell           = ws.cell(row=row, column=col, value=val)
-            cell.fill      = PatternFill("solid", fgColor=color)
+            cell.fill      = PatternFill("solid", fgColor=COLORS.get(i % 4, "FFFFFF"))
             cell.alignment = Alignment(horizontal="right", vertical="center")
             cell.font      = Font(name="Arial", size=11)
             cell.border    = Border(
@@ -388,20 +564,10 @@ def save_to_excel(puzzle: dict):
             )
         ws.row_dimensions[row].height = 24
 
+    # שורה ריקה בין ימים
     ws.append([""])
     wb.save(EXCEL_FILE)
-    log("✅ Excel נשמר")
-
-
-# ============================================================
-# לוג
-# ============================================================
-def log(message: str):
-    ts   = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    line = f"[{ts}] {message}"
-    print(line)
-    with open(LOG_FILE, "a", encoding="utf-8") as f:
-        f.write(line + "\n")
+    log(f"✅ Excel נשמר - נוספו {len(groups)} קבוצות")
 
 
 # ============================================================
@@ -409,10 +575,10 @@ def log(message: str):
 # ============================================================
 async def main():
     log("=" * 50)
-    log(f"סריקה חכמה עם Groq: {date.today().isoformat()}")
+    log(f"סריקה: {date.today().isoformat()}")
 
-    result             = await fetch_and_solve()
-    result["date"]     = date.today().isoformat()
+    result               = await fetch_and_solve()
+    result["date"]       = date.today().isoformat()
     result["fetched_at"] = datetime.now().isoformat()
 
     save_to_json(result)
@@ -421,9 +587,11 @@ async def main():
     log("=" * 50)
     log("📋 תוצאות סופיות:")
     for g in result.get("solved_groups", []):
+        src    = "🤖" if g.get("source") == "ai" else "📺"
         status = "✅" if g.get("correct") else "❓"
-        log(f"  {status} {g['category']}: {', '.join(g.get('words', []))}")
-    log(f"סה\"כ נפתרו: {result.get('total_solved', 0)}/4")
+        log(f"  {status}{src} {g.get('category')}: {', '.join(g.get('words', []))}")
+    log(f"סה\"כ: {result.get('total_solved', 0)}/4 | טעויות: {result.get('wrong_guesses', 0)}")
+    log(f"מקור: {result.get('source', 'unknown')}")
     log("✅ הושלם!")
 
 
