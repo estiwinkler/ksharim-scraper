@@ -367,10 +367,20 @@ async def solve_puzzle(page, words_16: list[str]) -> dict:
         if wrong_count >= MAX_WRONG_GUESSES:
             log("⚠️ הגענו ל-4 טעויות → מבזבז ניחוש אחד נוסף כדי לחשוף פתרון...")
             await click_words(page, remaining[:4])
-            await submit_guess(page)
-            await page.wait_for_timeout(3000)
-            await close_alert(page)
-            await page.wait_for_timeout(2000)
+await submit_guess(page)
+await page.wait_for_timeout(4000)
+await close_alert(page)
+await page.wait_for_timeout(2000)
+
+# לחץ על "הצגת תוצאות" אם קיים
+try:
+    show_btn = page.get_by_role("button", name=re.compile("הצגת תוצאות|הצג תוצאות|פתרון|תוצאות", re.IGNORECASE))
+    if await show_btn.count() > 0:
+        log("  לוחץ על הצגת תוצאות...")
+        await show_btn.first.click()
+        await page.wait_for_timeout(3000)
+except Exception:
+    pass
 
             # אסוף פתרון מהמסך
             screen_solution = await collect_solution_from_screen(page)
