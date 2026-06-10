@@ -116,6 +116,44 @@ def guess_almost_fix(remaining: list[str], almost_words: list[str], failed: list
 # ============================================================
 # פעולות Playwright
 # ============================================================
+async def handle_popups(page):
+    """סוגר חלונות פופאפ ומכניס שם אם נדרש."""
+    await page.wait_for_timeout(2000)
+
+    # הכנס שם אם יש שדה שם
+    try:
+        name_input = page.locator('input[type="text"], input[placeholder*="שם"], input[name*="name"]').first
+        if await name_input.count() > 0:
+            log("  מכניס שם למשחק...")
+            await name_input.fill("Bot")
+            await page.wait_for_timeout(500)
+
+            # לחץ על כפתור "אפשר להתחיל לשחק" או דומה
+            start_btn = page.get_by_role("button", name=re.compile("אפשר להתחיל|התחל|המשך|start|begin|ok|אישור", re.IGNORECASE))
+            if await start_btn.count() > 0:
+                await start_btn.first.click()
+                log("  לחץ על כפתור התחלה")
+                await page.wait_for_timeout(1500)
+    except Exception as e:
+        log(f"  שם/התחלה: {e}")
+
+    # סגור חלון "איך משחקים" אם פתוח
+    try:
+        close_btn = page.get_by_role("button", name=re.compile("סגירה|סגור|close|×|✕|המשך|OK", re.IGNORECASE))
+        if await close_btn.count() > 0:
+            await close_btn.first.click()
+            log("  סגר חלון הוראות")
+            await page.wait_for_timeout(1000)
+    except Exception as e:
+        log(f"  סגירת חלון: {e}")
+
+    # לחץ ESC למקרה שיש עוד חלון
+    await page.keyboard.press("Escape")
+    await page.wait_for_timeout(500)
+
+    log("  פופאפים טופלו")
+
+
 async def get_words(page) -> list[str]:
     await page.wait_for_timeout(3000)
 
@@ -512,6 +550,10 @@ async def fetch_and_solve() -> dict:
         page    = await context.new_page()
 
         await page.goto(URL, wait_until="networkidle", timeout=30000)
+
+        # טפל בפופאפים לפני הכל
+        await handle_popups(page)
+
         words = await get_words(page)
 
         if len(words) < 8:
