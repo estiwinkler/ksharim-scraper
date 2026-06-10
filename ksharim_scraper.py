@@ -363,11 +363,32 @@ async def solve_puzzle(page, words_16: list[str]) -> dict:
         attempt += 1
         log(f"\n--- ניסיון {attempt} | נפתרו: {len(solved_groups)}/4 | טעויות: {wrong_count}/{MAX_WRONG_GUESSES} ---")
 
-        # הגענו למגבלת הטעויות → בזבז ניחוש אחרון → חכה לפתרון
+        # הגענו למגבלת הטעויות → בזבז ניחושים עד שהפתרון מתגלה
         if wrong_count >= MAX_WRONG_GUESSES:
-            log("⚠️ הגענו ל-4 טעויות → מבזבז ניחוש אחד נוסף כדי לחשוף פתרון...")
-            await click_words(page, remaining[:4])
-            await submit_guess(page)
+            log("⚠️ הגענו ל-4 טעויות → מבזבז ניחושים לחשיפת פתרון...")
+            import random
+
+            # בצע עד 5 ניחושים רנדומליים כדי לרוקן את כל הניסיונות
+            shuffled = list(remaining)
+            random.shuffle(shuffled)
+            for attempt_idx in range(5):
+                guess_words = shuffled[attempt_idx*4 % len(shuffled):(attempt_idx*4 % len(shuffled))+4]
+                if len(guess_words) < 4:
+                    guess_words = shuffled[:4]
+                log(f"  ניחוש מבזבז {attempt_idx+1}: {guess_words}")
+                await click_words(page, guess_words)
+                await submit_guess(page)
+                await page.wait_for_timeout(2500)
+                await close_alert(page)
+                await page.wait_for_timeout(1000)
+
+                # בדוק אם הפתרון כבר מוצג (יש • על המסך)
+                has_solution = await page.evaluate("""
+                    () => document.body.innerText.includes('•')
+                """)
+                if has_solution:
+                    log("  ✅ פתרון מוצג על המסך!")
+                    break
             await page.wait_for_timeout(4000)
             await close_alert(page)
             await page.wait_for_timeout(2000)
@@ -385,6 +406,25 @@ async def solve_puzzle(page, words_16: list[str]) -> dict:
             except Exception as btn_err:
                 log(f"  שגיאה בחיפוש כפתור: {btn_err}")
                 await page.wait_for_timeout(3000)
+
+            # צלם מסך לדיאגנוסטיקה
+            screenshot_path = DATA_DIR / f"debug_{date.today().isoformat()}.png"
+            await page.screenshot(path=str(screenshot_path), full_page=True)
+            log(f"  צילום מסך נשמר: {screenshot_path}")
+
+            # שמור גם את ה-HTML המלא
+            html_path = DATA_DIR / f"debug_{date.today().isoformat()}.html"
+            html_content = await page.content()
+            with open(html_path, 'w', encoding='utf-8') as hf:
+                hf.write(html_content)
+            log(f"  HTML נשמר: {html_path}")
+
+            # שמור טקסט גולמי
+            raw_text = await page.inner_text("body")
+            txt_path = DATA_DIR / f"debug_{date.today().isoformat()}.txt"
+            with open(txt_path, 'w', encoding='utf-8') as tf:
+                tf.write(raw_text)
+            log(f"  טקסט גולמי:\n{raw_text[:1000]}")
 
             # אסוף פתרון מהמסך
             screen_solution = await collect_solution_from_screen(page)
