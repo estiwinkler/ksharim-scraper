@@ -129,7 +129,7 @@ async def handle_popups(page):
             await page.wait_for_timeout(500)
 
             # לחץ על כפתור "אפשר להתחיל לשחק" או דומה
-            start_btn = page.get_by_role("button", name=re.compile("אפשר להתחיל|התחל|המשך|start|begin|ok|אישור", re.IGNORECASE))
+            start_btn = page.locator("button:has-text('אפשר להתחיל לשחק'), button:has-text('התחל'), button:has-text('המשך')")
             if await start_btn.count() > 0:
                 await start_btn.first.click()
                 log("  לחץ על כפתור התחלה")
