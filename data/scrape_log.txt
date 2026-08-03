@@ -4800,3 +4800,99 @@ Call log:
 [2026-08-02 08:32:42] סה"כ: 0/4 | טעויות: 5
 [2026-08-02 08:32:42] מקור: screen_after_fail
 [2026-08-02 08:32:42] ✅ הושלם!
+[2026-08-03 09:40:18] ==================================================
+[2026-08-03 09:40:18] סריקה: 2026-08-03
+[2026-08-03 09:40:27]   מכניס שם למשחק...
+[2026-08-03 09:40:58]   שם/התחלה: Locator.click: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator("button:has-text('אפשר להתחיל לשחק'), button:has-text('התחל'), button:has-text('המשך')").first
+    - locator resolved to <button tabindex="0" type="button" class="MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-containedPrimary MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorPrimary MuiButton-root MuiButton-contained MuiButton-containedPrimary MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorPrimary submit-button css-ghr9bt">אפשר להתחיל לשחק</button>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is visible, enabled and stable
+      - scrolling into view if needed
+      - done scrolling
+      - <div class="MuiTypography-root MuiTypography-body1 css-vvdltt">…</div> from <div role="presentation" class="MuiModal-root css-1sucic7" aria-labelledby="help-modal-title" aria-describedby="help-modal-description">…</div> subtree intercepts pointer events
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is visible, enabled and stable
+      - scrolling into view if needed
+      - done scrolling
+      - <div class="MuiTypography-root MuiTypography-body1 css-vvdltt">…</div> from <div role="presentation" class="MuiModal-root css-1sucic7" aria-labelledby="help-modal-title" aria-describedby="help-modal-description">…</div> subtree intercepts pointer events
+    - retrying click action
+      - waiting 100ms
+    58 × waiting for element to be visible, enabled and stable
+       - element is visible, enabled and stable
+       - scrolling into view if needed
+       - done scrolling
+       - <div class="MuiTypography-root MuiTypography-body1 css-vvdltt">…</div> from <div role="presentation" class="MuiModal-root css-1sucic7" aria-labelledby="help-modal-title" aria-describedby="help-modal-description">…</div> subtree intercepts pointer events
+     - retrying click action
+       - waiting 500ms
+
+[2026-08-03 09:40:58]   סגר חלון הוראות
+[2026-08-03 09:40:59]   פופאפים טופלו
+[2026-08-03 09:41:02] נמצאו 16 מילים: משפט, גאון, ירא, אבן, טהור, חתן, דבר, נבון, קדוש, פיקח, חד, בית, כרם, שם, זהב, טוב
+[2026-08-03 09:41:02] מתחיל לפתור...
+[2026-08-03 09:41:02] 
+--- ניסיון 1 | נפתרו: 0/4 | טעויות: 0/4 ---
+[2026-08-03 09:41:02] שגיאת Groq: HTTP Error 403: Forbidden → עובר למצב ניחושים אוטומטי
+[2026-08-03 09:41:02] 
+--- ניסיון 2 | נפתרו: 0/4 | טעויות: 4/4 ---
+[2026-08-03 09:41:02] ⚠️ הגענו ל-4 טעויות → מבזבז ניחושים לחשיפת פתרון...
+[2026-08-03 09:41:02]   ניחוש מבזבז 1: ['כרם', 'דבר', 'משפט', 'ירא']
+[2026-08-03 09:43:06]   ניחוש מבזבז 2: ['קדוש', 'גאון', 'אבן', 'חתן']
+[2026-08-03 09:45:10]   ניחוש מבזבז 3: ['פיקח', 'שם', 'טוב', 'נבון']
+[2026-08-03 09:47:14]   ניחוש מבזבז 4: ['בית', 'טהור', 'חד', 'זהב']
+[2026-08-03 09:49:19]   ניחוש מבזבז 5: ['כרם', 'דבר', 'משפט', 'ירא']
+[2026-08-03 09:51:29]   לא נמצא כפתור הצגת תוצאות, ממתין לטעינה...
+[2026-08-03 09:51:33]   צילום מסך נשמר: data/debug_2026-08-03.png
+[2026-08-03 09:51:33]   HTML נשמר: data/debug_2026-08-03.html
+[2026-08-03 09:51:33]   טקסט גולמי:
+קשרים בריבוע
+משחק חשיבה יומי
+
+מצאו 4 קבוצות של 4 מילים קשורות
+משחק חדש בכל יום א'-ה' בשעה 00:00
+
+משפט
+גאון
+ירא
+אבן
+טהור
+חתן
+דבר
+נבון
+קדוש
+פיקח
+חד
+בית
+כרם
+שם
+זהב
+טוב
+ניחושים שנותרו:
+ערבב
+בטל בחירה
+בדיקה
+
+© 2026 כל הזכויות שמורות
+
+מצאתם טעות? דווחו לנו
+ברוכים הבאים!
+
+אנא הכניסו את שמכם כדי להתחיל לשחק
+
+שם
+שם
+אפשר להתחיל לשחק
+[2026-08-03 09:51:35]   מנסה גישה חלופית לאיסוף פתרון...
+[2026-08-03 09:51:35]   נאספו 0 קבוצות מהמסך
+[2026-08-03 09:51:35]   נוספה רשומה חדשה ליום 2026-08-03
+[2026-08-03 09:51:35] ✅ JSON נשמר - סה"כ 58 ימים במאגר
+[2026-08-03 09:51:35] ✅ Excel נשמר - נוספו 0 קבוצות
+[2026-08-03 09:51:35] ==================================================
+[2026-08-03 09:51:35] 📋 תוצאות סופיות:
+[2026-08-03 09:51:35] סה"כ: 0/4 | טעויות: 5
+[2026-08-03 09:51:35] מקור: screen_after_fail
+[2026-08-03 09:51:35] ✅ הושלם!
